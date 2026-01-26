@@ -246,6 +246,8 @@ class PodmanSandboxEnvironment(SandboxEnvironment):
     ) -> ExecResult[str]:
         """Execute a command in the container."""
         args = ["podman", "exec"]
+        if input is not None:
+            args.append("--interactive")
 
         final_cwd = PurePosixPath(self._working_dir if cwd is None else cwd)
         if not final_cwd.is_absolute():
