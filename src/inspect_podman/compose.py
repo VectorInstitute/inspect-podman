@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import os
 import re
+import time
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -37,6 +39,70 @@ async def compose_up(
         timeout=timeout,
     )
     return result
+
+
+async def compose_wait_for_health(
+    project: ComposeProject, services: dict[str, ComposeService]
+) -> None:
+    """Wait for services with healthchecks to become healthy."""
+    healthcheck_services = {
+        name for name, service in services.items() if service.get("healthcheck")
+    }
+    delay = _startup_delay()
+    services_without_healthcheck = [
+        name for name, service in services.items() if not service.get("healthcheck")
+    ]
+    if not healthcheck_services:
+        if delay > 0 and services_without_healthcheck:
+            logger.info(
+                "Waiting %.1fs for podman services without healthchecks: %s",
+                delay,
+                ", ".join(sorted(services_without_healthcheck)),
+            )
+            await asyncio.sleep(delay)
+        return
+
+    healthcheck_time = services_healthcheck_time(services)
+    timeout = max(healthcheck_time, COMPOSE_WAIT)
+    deadline = time.monotonic() + timeout
+
+    while True:
+        running = await podman_ps(project.name, status="running", all=False)
+        container_by_service = {
+            container.get("Service"): container.get("Name")
+            for container in running
+            if container.get("Service") and container.get("Name")
+        }
+
+        pending: list[str] = []
+        for service in healthcheck_services:
+            container = container_by_service.get(service)
+            if not container:
+                pending.append(service)
+                continue
+
+            status = await _container_health_status(container)
+            if status != "healthy":
+                pending.append(service)
+
+        if not pending:
+            break
+
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                "Timed out waiting for podman healthchecks to pass: "
+                + ", ".join(sorted(pending))
+            )
+
+        await asyncio.sleep(1)
+
+    if delay > 0 and services_without_healthcheck:
+        logger.info(
+            "Waiting %.1fs for podman services without healthchecks: %s",
+            delay,
+            ", ".join(sorted(services_without_healthcheck)),
+        )
+        await asyncio.sleep(delay)
 
 
 async def compose_down(project: ComposeProject, quiet: bool = True) -> None:
@@ -221,6 +287,42 @@ async def compose_command(
             retries += 1
             if not timeout_retry or retries > 2:
                 raise ex
+
+
+async def _container_health_status(container: str) -> str | None:
+    result = await subprocess(
+        ["podman", "inspect", container, "--format", "{{json .State.Health}}"],
+        timeout=10,
+        capture_output=True,
+    )
+    if not result.success:
+        return None
+    output = result.stdout.strip()
+    if not output or output == "null":
+        return None
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(payload, dict):
+        status = payload.get("Status")
+        if isinstance(status, str):
+            return status
+    return None
+
+
+def _startup_delay() -> float:
+    value = os.environ.get("INSPECT_PODMAN_STARTUP_DELAY", "").strip()
+    if not value:
+        return 0.0
+    try:
+        delay = float(value)
+    except ValueError:
+        logger.warning(
+            "Invalid INSPECT_PODMAN_STARTUP_DELAY value '%s'; ignoring.", value
+        )
+        return 0.0
+    return max(delay, 0.0)
 
 
 async def podman_ps(

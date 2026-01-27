@@ -44,11 +44,12 @@ def service_healthcheck_time(service: ComposeService) -> int:
     if healthcheck is None:
         return 0
 
+    start_period = parse_duration(healthcheck.get("start_period", "0s"))
     retries = healthcheck.get("retries", 3)
     interval = parse_duration(healthcheck.get("interval", "30s"))
     timeout = parse_duration(healthcheck.get("timeout", "30s"))
 
-    total_time = retries * (interval.seconds + timeout.seconds)
+    total_time = start_period.seconds + retries * (interval.seconds + timeout.seconds)
     return int(total_time)
 
 

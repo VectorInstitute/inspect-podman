@@ -39,6 +39,7 @@ from .compose import (
     compose_pull,
     compose_services,
     compose_up,
+    compose_wait_for_health,
     podman_ps,
 )
 from .internal import build_internal_image, is_internal_image
@@ -135,6 +136,7 @@ class PodmanSandboxEnvironment(SandboxEnvironment):
         try:
             services = await compose_services(project)
             await compose_up(project, services)
+            await compose_wait_for_health(project, services)
 
             running_services = await compose_check_running(
                 list(services.keys()), project=project
