@@ -17,7 +17,7 @@ from inspect_ai.util import ExecResult, subprocess
 from inspect_ai.util import concurrency as concurrency_manager
 
 from .prereqs import resolve_compose_cmd
-from .service import ComposeService, services_healthcheck_time
+from .service import ComposeService, service_healthcheck_time, services_healthcheck_time
 from .util import ComposeProject
 
 logger = getLogger(__name__)
@@ -65,6 +65,7 @@ async def compose_wait_for_health(
     healthcheck_time = services_healthcheck_time(services)
     timeout = max(healthcheck_time, COMPOSE_WAIT)
     deadline = time.monotonic() + timeout
+    healthcheck_services = set(healthcheck_services)
 
     while True:
         running = await podman_ps(project.name, status="running", all=False)
@@ -75,15 +76,37 @@ async def compose_wait_for_health(
         }
 
         pending: list[str] = []
-        for service in healthcheck_services:
+        missing_health: set[str] = set()
+        for service in list(healthcheck_services):
             container = container_by_service.get(service)
             if not container:
                 pending.append(service)
                 continue
 
             status = await _container_health_status(container)
+            if status is None:
+                missing_health.add(service)
+                continue
             if status != "healthy":
                 pending.append(service)
+
+        if missing_health:
+            fallback_time = max(
+                (service_healthcheck_time(services[name]) for name in missing_health),
+                default=0,
+            )
+            delay = max(delay, fallback_time)
+            logger.warning(
+                "Podman did not report health status for: %s. "
+                "Falling back to startup delay.",
+                ", ".join(sorted(missing_health)),
+            )
+            healthcheck_services -= missing_health
+            services_without_healthcheck = sorted(
+                set(services_without_healthcheck) | missing_health
+            )
+            if not healthcheck_services:
+                break
 
         if not pending:
             break

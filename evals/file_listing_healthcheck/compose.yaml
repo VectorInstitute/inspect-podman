@@ -1,0 +1,16 @@
+services:
+  default:
+    image: python:3.12-alpine
+    command: ["sh", "-c", "sleep 3 && python -m http.server 8000"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 8000)); s.close()",
+        ]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+      start_period: 1s
