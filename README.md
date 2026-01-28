@@ -30,7 +30,19 @@ podman info
 From this repo:
 
 ```
-pip install -e .
+uv sync
+```
+
+For editable installs:
+
+```
+uv pip install -e .
+```
+
+Activate the environment:
+
+```
+source .venv/bin/activate
 ```
 
 ## Usage with Inspect
