@@ -45,6 +45,14 @@ Activate the environment:
 source .venv/bin/activate
 ```
 
+Some evals and model providers require extra Python packages (e.g., `openai`). Since this project uses `uv`, install any optional dependencies with `uv` as well. We don’t include these by default to keep the extension lightweight.
+
+Example:
+
+```
+uv pip install openai
+```
+
 ## Usage with Inspect
 
 In Python:
