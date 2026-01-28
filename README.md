@@ -53,6 +53,14 @@ Example:
 uv pip install openai
 ```
 
+If you don’t use `uv`, you can install with `pip` instead:
+
+```
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
 ## Usage with Inspect
 
 In Python:
