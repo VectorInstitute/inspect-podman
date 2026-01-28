@@ -117,6 +117,18 @@ The provider searches the task directory in this order:
 
 If you provide `sandbox=("podman", "path/to/compose.yaml")`, that file is used directly.
 
+## Healthchecks
+
+If a compose service defines a healthcheck, the provider waits for it to report `healthy` before running the sample. This mirrors how Inspect handles readiness in Docker-based sandboxes and is exercised by `evals/file_listing_healthcheck/`.
+
+You can add a fixed startup delay (for services without healthchecks or when Podman doesn’t report health status) by setting:
+
+```
+export INSPECT_PODMAN_STARTUP_DELAY=5
+```
+
+This is useful when a service is ready shortly after startup but doesn’t expose a healthcheck, or when Podman does not surface health status for a container. Otherwise the eval may start too early and fail.
+
 ## Cleanup
 
 Inspect will clean up pods/containers automatically unless you disable it:
