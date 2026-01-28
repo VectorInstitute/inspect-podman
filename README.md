@@ -1,6 +1,6 @@
 # Inspect Podman Sandbox
 
-A Podman-backed sandbox environment for the Inspect AI evaluation framework ([Inspect AI](https://inspect.aisi.org.uk)). It provides a Podman implementation of Inspect’s sandbox API so evals can run containerized tool calls without Docker.
+A Podman-backed sandbox environment for the [Inspect](https://inspect.aisi.org.uk) evaluation framework. It provides a Podman implementation of Inspect’s sandbox API so evals can run containerized tool calls without Docker.
 
 ## Features
 
