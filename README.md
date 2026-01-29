@@ -11,11 +11,19 @@ A Podman-backed sandbox environment for the [Inspect](https://inspect.aisi.org.u
 
 ## Start Podman
 
-Make sure Podman and Podman Compose are installed and available on your PATH, then start the Podman VM or service (example using `podman machine`):
+Make sure Podman and Podman Compose are installed and available on your PATH, then ensure the Podman service is running.
+
+Linux does not require `podman machine` (Podman runs natively). If you are on macOS/Windows, start the Podman VM:
 
 ```
 podman machine init
 podman machine start
+```
+
+Verify connectivity:
+
+```
+podman info
 ```
 
 Check the connection:
