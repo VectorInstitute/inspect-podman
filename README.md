@@ -155,4 +155,4 @@ inspect sandbox cleanup podman <container-id>
 ## Notes and Limitations
 
 - Compose services that set `container_name` are rejected because Inspect runs multiple epochs/samples and needs unique container names per run; fixed names would collide across runs.
-- This extension is intended as a Docker replacement for Inspect sandboxing, but behavior can differ across Podman versions and compose features. If an eval relies on Docker‑specific behavior, you may need small adjustments.
+- This extension is intended as a Docker replacement for Inspect sandboxing, but behavior can differ across Podman versions and compose features. If an eval relies on Docker-specific behavior, you may need small adjustments.
