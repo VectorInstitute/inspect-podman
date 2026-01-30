@@ -14,7 +14,7 @@ This folder contains evals you can use to validate the Podman sandbox provider. 
 
 To run:
 
-```
+```sh
 inspect eval evals/file_listing/file_listing.py
 ```
 
@@ -26,7 +26,7 @@ Why this exists: the Inspect Evals examples don’t include a healthcheck scenar
 
 To run:
 
-```
+```sh
 inspect eval evals/file_listing_healthcheck/file_listing_healthcheck.py
 ```
 
@@ -36,7 +36,7 @@ inspect eval evals/file_listing_healthcheck/file_listing_healthcheck.py
 
 Install `inspect-evals` in the same environment first:
 
-```
+```sh
 uv pip install inspect-evals
 ```
 
@@ -53,14 +53,14 @@ Below is the list of wrappers we include here:
 
 To run any wrapper, replace the file name as needed:
 
-```
+```sh
 inspect eval evals/inspect_evals/gaia.py --limit 1
 ```
 
 We only include a small set of wrappers for testing. If you clone the upstream `inspect_evals` repo (or use a private fork) and want to run other evals, you can:
 
 1) Pass the sandbox override on the CLI:
-```
+```sh
 inspect eval path/to/task.py --sandbox podman
 ```
 

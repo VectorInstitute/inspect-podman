@@ -15,7 +15,7 @@ Make sure Podman and Podman Compose are installed and available on your PATH, th
 
 Linux does not require `podman machine` (Podman runs natively). If you are on macOS/Windows, start the Podman VM:
 
-```
+```sh
 podman machine init
 podman machine start
 ```
@@ -28,7 +28,7 @@ podman info
 
 Check the connection:
 
-```
+```sh
 podman system connection list
 podman info
 ```
@@ -37,19 +37,19 @@ podman info
 
 From this repo:
 
-```
+```sh
 uv sync
 ```
 
 For editable installs:
 
-```
+```sh
 uv pip install -e .
 ```
 
 Activate the environment:
 
-```
+```sh
 source .venv/bin/activate
 ```
 
@@ -57,13 +57,13 @@ Some evals and model providers require extra Python packages (e.g., `openai`). S
 
 Example:
 
-```
+```sh
 uv pip install openai
 ```
 
 If you don’t use `uv`, you can install with `pip` instead:
 
-```
+```sh
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
@@ -81,7 +81,7 @@ eval("my_task.py", sandbox="podman")
 
 From the CLI:
 
-```
+```sh
 inspect eval my_task.py --sandbox podman
 ```
 
@@ -95,7 +95,7 @@ eval("my_task.py", sandbox=("podman", "compose.yaml"))
 
 Sample evals live in [evals/](evals/) and are for testing the Podman provider. Start with:
 
-```
+```sh
 inspect eval evals/file_listing/file_listing.py
 ```
 
@@ -109,7 +109,7 @@ By default we auto-detect the compose frontend. If you need to force the
 standalone `podman-compose` binary (e.g., to match an environment that only
 has `podman-compose` available), set:
 
-```
+```sh
 export INSPECT_PODMAN_COMPOSE=podman-compose
 ```
 
@@ -131,7 +131,7 @@ If a compose service defines a healthcheck, the provider waits for it to report 
 
 You can add a fixed startup delay (for services without healthchecks or when Podman doesn’t report health status) by setting:
 
-```
+```sh
 export INSPECT_PODMAN_STARTUP_DELAY=5
 ```
 
@@ -141,13 +141,13 @@ This is useful when a service is ready shortly after startup but doesn’t expos
 
 Inspect will clean up pods/containers automatically unless you disable it:
 
-```
+```sh
 inspect eval my_task.py --no-sandbox-cleanup
 ```
 
 Manual cleanup:
 
-```
+```sh
 inspect sandbox cleanup podman
 inspect sandbox cleanup podman <container-id>
 ```
