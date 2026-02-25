@@ -40,6 +40,8 @@ Install `inspect-evals` in the same environment first:
 uv pip install inspect-evals
 ```
 
+Get access to ` https://huggingface.co/datasets/gaia-benchmark/GAIA`.
+
 Below is the list of wrappers we include here:
 
 - `gaia.py` — compose, tool-heavy
