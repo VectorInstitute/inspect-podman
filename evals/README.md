@@ -45,7 +45,7 @@ Below is the list of wrappers we include here:
 - `gaia.py` — compose, tool-heavy
 - `class_eval.py` — Dockerfile-only build path
 - `agentdojo.py` — multi-container compose
-- `cybench.py` - multi-container compose
+- `cybench.py` — multi-container compose
 - `gdm_in_house_ctf.py` — multi-container compose
 - `arc_easy.py` — model-only sanity
 - `arc_challenge.py` — model-only sanity
