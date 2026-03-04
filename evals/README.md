@@ -44,9 +44,8 @@ Below is the list of wrappers we include here:
 
 - `gaia.py` — compose, tool-heavy
 - `class_eval.py` — Dockerfile-only build path
-- `bigcodebench.py` — compose + Dockerfile
 - `agentdojo.py` — multi-container compose
-- `cybench.py` — multi-container compose
+- `cybench.py` - multi-container compose
 - `gdm_in_house_ctf.py` — multi-container compose
 - `arc_easy.py` — model-only sanity
 - `arc_challenge.py` — model-only sanity
@@ -68,4 +67,5 @@ inspect eval path/to/task.py --sandbox podman
 
 ### Notes
 
-- Some evals (e.g., `cybench`) require extra datasets or dependencies; check the `inspect-evals` docs/README before running.
+- Some evals (e.g., `cybench`) require extra datasets or dependencies; check the [inspect-evals](https://github.com/UKGovernmentBEIS/inspect_evals) docs/README and each eval’s specific requirements before running.
+- Some evals may still hardcode `docker` CLI calls internally (for example, image build/pull helpers). In those cases, changing `sandbox="podman"` is not enough; the eval code itself needs to be updated to use Podman or sandbox-agnostic helpers.
