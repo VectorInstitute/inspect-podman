@@ -101,7 +101,7 @@ inspect eval evals/file_listing/file_listing.py
 
 If you’re writing your own evals, set the sandbox to `podman` (e.g., `sandbox="podman"` or `sandbox=("podman", "compose.yaml")`) to run them with Podman instead of Docker.
 
-See [docs/evals-usage.md](docs/evals-usage.md) for details, including how to use this extension with [inspect_evals](https://github.com/UKGovernmentBEIS/inspect_evals).
+See [evals/README.md](evals/README.md) for details, including how to use this extension with [inspect_evals](https://github.com/UKGovernmentBEIS/inspect_evals).
 
 ## Forcing podman-compose (optional)
 
