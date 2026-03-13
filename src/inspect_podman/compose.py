@@ -237,18 +237,48 @@ async def compose_cleanup_images(
         images = json.loads(result.stdout) if result.stdout.strip() else []
         if not isinstance(images, list):
             return
+        removed: set[str] = set()
         for image in images:
-            repository = image.get("Repository") or ""
-            tag = image.get("Tag") or ""
-            if repository.startswith(project.name):
-                name = f"{repository}:{tag}" if tag else repository
+            for reference in _image_references(image):
+                if reference in removed or not _matches_project_image(
+                    reference, project.name
+                ):
+                    continue
                 await subprocess(
-                    ["podman", "rmi", name],
+                    ["podman", "rmi", reference],
                     timeout=timeout,
                     capture_output=True,
                 )
+                removed.add(reference)
     except Exception as ex:
         logger.warning("Failed to cleanup podman images: %s", ex)
+
+
+def _image_references(image: dict[str, Any]) -> list[str]:
+    references: list[str] = []
+    repository = image.get("Repository")
+    tag = image.get("Tag")
+    if isinstance(repository, str) and repository:
+        if isinstance(tag, str) and tag:
+            references.append(f"{repository}:{tag}")
+        else:
+            references.append(repository)
+
+    for key in ("Names", "RepoTags", "RepoDigests", "History"):
+        value = image.get(key)
+        if isinstance(value, list):
+            references.extend(item for item in value if isinstance(item, str))
+        elif isinstance(value, str) and value:
+            references.append(value)
+
+    return list(dict.fromkeys(ref for ref in references if ref))
+
+
+def _matches_project_image(reference: str, project_name: str) -> bool:
+    normalized = reference.split("@", 1)[0]
+    last_segment = normalized.rsplit("/", 1)[-1]
+    repository = last_segment.rsplit(":", 1)[0]
+    return repository.startswith(project_name)
 
 
 async def compose_command(
