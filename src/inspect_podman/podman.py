@@ -10,7 +10,7 @@ import shlex
 import tempfile
 from logging import getLogger
 from pathlib import Path, PurePosixPath
-from typing import Literal, Union, overload
+from typing import Literal, overload
 
 from inspect_ai._util.error import PrerequisiteError
 from inspect_ai.log._samples import sample_active
@@ -240,7 +240,7 @@ class PodmanSandboxEnvironment(SandboxEnvironment):
         cmd: list[str],
         input: str | bytes | None = None,
         cwd: str | None = None,
-        env: dict[str, str] = {},
+        env: dict[str, str] | None = None,
         user: str | None = None,
         timeout: int | None = None,
         timeout_retry: bool = True,
@@ -341,7 +341,7 @@ class PodmanSandboxEnvironment(SandboxEnvironment):
     @overload
     async def read_file(self, file: str, text: Literal[False]) -> bytes: ...
 
-    async def read_file(self, file: str, text: bool = True) -> Union[str, bytes]:
+    async def read_file(self, file: str, text: bool = True) -> str | bytes:
         """Read a file from the container."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
             original_file = file
@@ -532,13 +532,37 @@ def parse_docker_inspect_ports(json_str: str) -> list[PortMapping] | None:
     for port_protocol, mappings in data.items():
         if mappings is None:
             continue
-        container_port, protocol = port_protocol.split("/")
-        host_mappings = [
-            HostMapping(host_ip=mapping["HostIp"], host_port=int(mapping["HostPort"]))
-            for mapping in mappings
-        ]
+
+        if "/" not in port_protocol:
+            continue
+        container_port_raw, protocol = port_protocol.split("/", 1)
+        try:
+            container_port = int(container_port_raw)
+        except ValueError:
+            continue
+
+        if not isinstance(mappings, list):
+            continue
+
+        host_mappings: list[HostMapping] = []
+        for mapping in mappings:
+            if not isinstance(mapping, dict):
+                continue
+            host_ip = mapping.get("HostIp")
+            host_port_raw = mapping.get("HostPort")
+            if not isinstance(host_ip, str):
+                continue
+            try:
+                host_port = int(str(host_port_raw))
+            except (TypeError, ValueError):
+                continue
+            host_mappings.append(HostMapping(host_ip=host_ip, host_port=host_port))
+
+        if not host_mappings:
+            continue
+
         port_mapping = PortMapping(
-            container_port=int(container_port),
+            container_port=container_port,
             protocol=protocol,
             mappings=host_mappings,
         )

@@ -6,8 +6,6 @@ from inspect_ai._util.constants import PKG_PATH
 from inspect_ai._util.error import PrerequisiteError
 from inspect_ai.util import subprocess
 
-INSPECT_WEB_BROWSER_IMAGE_DOCKERHUB_DEPRECATED = "aisiuk/inspect-web-browser-tool"
-
 INSPECT_WEB_BROWSER_IMAGE_DEPRECATED = "inspect_web_browser"
 INSPECT_COMPUTER_IMAGE = "inspect-computer-tool"
 
@@ -19,14 +17,6 @@ INTERNAL_IMAGES = {
     / "_resources",
     INSPECT_COMPUTER_IMAGE: PKG_PATH / "tool" / "beta" / "_computer" / "_resources",
 }
-
-
-async def is_internal_image_built(image: str) -> bool:
-    """Return True if the internal image exists locally."""
-    result = await subprocess(
-        ["podman", "images", "--filter", f"reference={image}", "--format", "json"]
-    )
-    return bool(result.stdout.strip())
 
 
 async def build_internal_image(image: str) -> None:

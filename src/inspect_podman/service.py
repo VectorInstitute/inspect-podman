@@ -80,16 +80,23 @@ def parse_duration(duration_str: str) -> Duration:
     }
 
     duration_str = "".join(duration_str.split())
-    pattern = re.compile(r"(\d+)([a-z]+)")
-    matches = pattern.findall(duration_str)
-
-    if not matches:
+    if duration_str.startswith("-"):
         raise ValueError(f"Invalid duration format: {duration_str}")
 
+    pattern = re.compile(r"(\d+(?:\.\d+)?)(ns|us|ms|s|m|h)")
+
     total_nanoseconds = 0
-    for number, unit in matches:
-        if unit not in units:
-            raise ValueError(f"Invalid unit: {unit}")
-        total_nanoseconds += int(number) * units[unit]
+    offset = 0
+    for match in pattern.finditer(duration_str):
+        if match.start() != offset:
+            raise ValueError(f"Invalid duration format: {duration_str}")
+
+        number = float(match.group(1))
+        unit = match.group(2)
+        total_nanoseconds += int(round(number * units[unit]))
+        offset = match.end()
+
+    if offset != len(duration_str):
+        raise ValueError(f"Invalid duration format: {duration_str}")
 
     return Duration(total_nanoseconds)
