@@ -389,8 +389,7 @@ class PodmanSandboxEnvironment(SandboxEnvironment):
                     "-it",
                     *(["--user", user] if user else []),
                     self._container,
-                    "bash",
-                    "-l",
+                    "sh",
                 ]
             ),
             vscode_command=None,

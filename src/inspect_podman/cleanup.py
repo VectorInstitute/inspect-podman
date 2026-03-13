@@ -117,11 +117,17 @@ async def cleanup_projects(
             )
 
 
-async def cli_cleanup(project_name: str | None) -> None:
+async def cli_cleanup(identifier: str | None) -> None:
     """Handle cleanup invoked from the Inspect CLI."""
     containers = await _all_compose_containers()
-    if project_name:
-        containers = [c for c in containers if c["project"] == project_name]
+    if identifier:
+        containers = [
+            c
+            for c in containers
+            if c["project"] == identifier
+            or c["name"] == identifier
+            or ((c["id"] or "").startswith(identifier))
+        ]
     else:
         containers = [c for c in containers if is_inspect_project(c["project"])]
 
@@ -169,7 +175,14 @@ async def _all_compose_containers() -> list[dict[str, str | None]]:
             continue
 
         config = _compose_config_from_labels(labels)
-        discovered.append({"project": project, "config": config})
+        discovered.append(
+            {
+                "id": _container_id(container),
+                "name": _container_name(container),
+                "project": project,
+                "config": config,
+            }
+        )
 
     return discovered
 
@@ -198,6 +211,27 @@ def _compose_config_from_labels(labels: dict[str, str]) -> str | None:
     if not config_path.is_absolute():
         config_path = Path(working_dir) / config_file
     return config_path.as_posix()
+
+
+def _container_id(container: dict[str, object]) -> str | None:
+    container_id = container.get("Id") or container.get("ID")
+    if isinstance(container_id, str):
+        return container_id
+    return None
+
+
+def _container_name(container: dict[str, object]) -> str | None:
+    names = container.get("Names")
+    if isinstance(names, list) and names:
+        first = names[0]
+        if isinstance(first, str):
+            return first
+    if isinstance(names, str):
+        return names
+    name = container.get("Name")
+    if isinstance(name, str):
+        return name
+    return None
 
 
 def _normalize_labels(labels: object) -> dict[str, str]:
