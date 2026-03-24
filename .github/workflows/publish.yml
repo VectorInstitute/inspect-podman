@@ -39,3 +39,4 @@ jobs:
         with:
           artifacts: "dist/*"
           generateReleaseNotes: true
+          allowUpdates: true
