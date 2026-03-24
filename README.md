@@ -35,55 +35,20 @@ podman info
 
 ## Install
 
-From PyPI (recommended):
+From PyPI:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
 pip install inspect-podman
 ```
 
-With `uv`:
-
-```bash
-uv venv
-source .venv/bin/activate
-uv pip install inspect-podman
-```
-
-From this repo (development):
+If you are using Inspect Podman in this repository, start by installing the necessary dependencies with:
 
 ```bash
 uv sync
 ```
 
-For editable installs:
+Some evals and model providers require extra Python packages (e.g., `openai`). We don’t include these by default to keep the extension lightweight.
 
-```bash
-uv pip install -e .
-```
-
-Activate the environment:
-
-```bash
-source .venv/bin/activate
-```
-
-Some evals and model providers require extra Python packages (e.g., `openai`). Since this project uses `uv`, install any optional dependencies with `uv` as well. We don’t include these by default to keep the extension lightweight.
-
-Example:
-
-```bash
-uv pip install openai
-```
-
-If you don’t use `uv`, you can install with `pip` instead:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
 
 ## Usage with Inspect
 
@@ -174,6 +139,6 @@ inspect sandbox cleanup podman <container-id>
 - This extension is intended as a Docker replacement for Inspect sandboxing, but behavior can differ across Podman versions and compose features. If an eval relies on Docker‑specific behavior, you may need small adjustments.
 
 
-## Acknowledgement 
+## Acknowledgement
 
 This project was conducted by the Vector Institute and the National Research Council of Canada, on behalf of the Canadian AI Safety Institute.
