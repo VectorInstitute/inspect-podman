@@ -35,21 +35,37 @@ podman info
 
 ## Install
 
-From this repo:
+From PyPI (recommended):
 
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install inspect-podman
 ```
+
+With `uv`:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install inspect-podman
+```
+
+From this repo (development):
+
+```bash
 uv sync
 ```
 
 For editable installs:
 
-```
+```bash
 uv pip install -e .
 ```
 
 Activate the environment:
 
-```
+```bash
 source .venv/bin/activate
 ```
 
@@ -57,13 +73,13 @@ Some evals and model providers require extra Python packages (e.g., `openai`). S
 
 Example:
 
-```
+```bash
 uv pip install openai
 ```
 
 If you don’t use `uv`, you can install with `pip` instead:
 
-```
+```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
