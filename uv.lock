@@ -7,6 +7,18 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "agent-client-protocol"
+version = "0.10.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/a0/3b96cd8374725c69bc3dae9fcc2082f3f6cafec1be35d24d7af0f8c3265f/agent_client_protocol-0.10.1.tar.gz", hash = "sha256:355c65ca19f0568344aafc2c1552b7066a8fc491df23ab28e7e253c6c9a85a25", size = 81924, upload-time = "2026-05-24T18:46:44.444Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/18/d8c7ff337cf621ea79a84006a7252ff057bfb5767549bb102cc6649f4ec2/agent_client_protocol-0.10.1-py3-none-any.whl", hash = "sha256:a03d3198f4d772f2e0ec012c00ac1cce131b4710220a3dc9fae3c991d047c750", size = 65401, upload-time = "2026-05-24T18:46:43.202Z" },
+]
+
+[[package]]
 name = "aioboto3"
 version = "15.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -808,9 +820,10 @@ wheels = [
 
 [[package]]
 name = "inspect-ai"
-version = "0.3.224"
+version = "0.3.226"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "agent-client-protocol" },
     { name = "aioboto3" },
     { name = "anyio" },
     { name = "beautifulsoup4" },
@@ -852,9 +865,9 @@ dependencies = [
     { name = "zipp" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f6/b2/dfe0e2724a0ea146f406f6d8e1ab922623b10ad49e66986fea1552e578d6/inspect_ai-0.3.224.tar.gz", hash = "sha256:d3b2b4dd04a34f7662744c29b082fbdbb0e1974de980e5a8225cf81ffa1b24af", size = 45866722, upload-time = "2026-05-20T20:40:49.109Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f0/04/83c5e5e5964cdabc94880dc9a9fc23c9c3fda6f75b9642b1af250a7df094/inspect_ai-0.3.226.tar.gz", hash = "sha256:61af2b60e37da835778d8670cb6a8d2c789fb14fc3f6f52bdad3846e5c3866ac", size = 46842500, upload-time = "2026-05-25T13:27:38.195Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/13/2285ad3b8cc918064cdbfc5a928670bd7dc4084d31f4196bfc9502ec464b/inspect_ai-0.3.224-py3-none-any.whl", hash = "sha256:9487bef3f8f5d4d8cbbd48696bb5552400582aad86362ed6a546f38960807d8a", size = 36211398, upload-time = "2026-05-20T20:40:42.736Z" },
+    { url = "https://files.pythonhosted.org/packages/63/39/40c8c84154905a3bbbf33b0125ed65f5e566704669b38cb7db033a08c3b1/inspect_ai-0.3.226-py3-none-any.whl", hash = "sha256:bd483ebf5b23eea767830e90e8332766bb53419bad808a9ad43af2d1d2332427", size = 36567248, upload-time = "2026-05-25T13:27:29.361Z" },
 ]
 
 [[package]]
