@@ -837,7 +837,7 @@ wheels = [
 
 [[package]]
 name = "inspect-ai"
-version = "0.3.239"
+version = "0.3.240"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -882,9 +882,9 @@ dependencies = [
     { name = "zipp" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/21/46c017001185f579f5235d6662cdfd46de643089a7214d9072692bf72463/inspect_ai-0.3.239.tar.gz", hash = "sha256:a6e939e6b74484538efeb0a35bd9c85b6642e84e70ff667790d0cfc23d6b2fba", size = 49131197, upload-time = "2026-06-09T18:52:24.606Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5d/74/59d732f7f25fc8cfd7914dfa9831b7ae6ece4c3e06254caee9a4d9889261/inspect_ai-0.3.240.tar.gz", hash = "sha256:8a0bb8ba1fd73a86b106eed7ea9c32eecb9a856f9ae2dcd08d94385801a5bcb3", size = 46723848, upload-time = "2026-06-15T18:39:15.497Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/28/7a/288fbc109c5a0d565f72de11d4cf006b4c07435d29770ce316bc90acb249/inspect_ai-0.3.239-py3-none-any.whl", hash = "sha256:150045ba02426309961fb6159b5e702a10c4d4f7df216d6dc77f112f92ec48ae", size = 36465899, upload-time = "2026-06-09T18:52:12.299Z" },
+    { url = "https://files.pythonhosted.org/packages/70/23/0b3b7bdae6641cd447f11c2cf1d1dbc9819fcc1a67b454734da34e7ac18c/inspect_ai-0.3.240-py3-none-any.whl", hash = "sha256:f366d012800d6d96e25b5a46c13fef5a20f7e8ee48e8d609db899b706599ed8c", size = 33940870, upload-time = "2026-06-15T18:39:02.988Z" },
 ]
 
 [[package]]
