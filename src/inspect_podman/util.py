@@ -14,8 +14,8 @@ from inspect_ai.util import ComposeConfig
 from .config import (
     COMPOSE_DOCKERFILE_YAML,
     auto_compose_file,
-    check_inline_build_contexts,
     is_dockerfile,
+    prepare_inline_build_contexts,
     resolve_compose_file,
 )
 
@@ -48,7 +48,7 @@ class ComposeProject:
             config_data = config.model_dump(
                 mode="json", by_alias=True, exclude_none=True
             )
-            check_inline_build_contexts(config_data)
+            prepare_inline_build_contexts(config_data)
             config_yaml = yaml.dump(
                 config_data,
                 default_flow_style=False,

@@ -102,12 +102,14 @@ def is_auto_compose_file(file: str, project_name: str) -> bool:
 _REMOTE_CONTEXT = re.compile(r"^(https?|git|ssh)://|^git@", re.IGNORECASE)
 
 
-def check_inline_build_contexts(config: dict[str, Any]) -> None:
-    """Refuse inline build contexts that cannot be resolved as local paths.
+def prepare_inline_build_contexts(config: dict[str, Any]) -> None:
+    """Check inline build contexts and expand home-relative ones in place.
 
     Relative build contexts in a generated file are resolved against a base
     directory. Remote contexts and contexts with variables would be broken
-    by that, so they must come from a compose file instead.
+    by that, so they must come from a compose file instead. A context that
+    starts with `~` is expanded to the user's home directory first, as
+    Compose does.
 
     Raises:
         ValueError: A service's build context is remote or uses a variable.
@@ -129,6 +131,12 @@ def check_inline_build_contexts(config: dict[str, Any]) -> None:
                 f"({context}). Variables in build contexts are not supported "
                 "in an inline ComposeConfig. Use a compose file instead."
             )
+        if context.startswith("~"):
+            expanded = os.path.expanduser(context)
+            if isinstance(build, dict):
+                build["context"] = expanded
+            else:
+                service["build"] = expanded
 
 
 def is_dockerfile(file: str) -> bool:

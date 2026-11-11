@@ -330,3 +330,19 @@ async def test_inline_build_context_variable_is_refused(
     with pytest.raises(ValueError, match="Variables in build contexts"):
         await ComposeProject.create(name=task_project_name("task"), config=config)
     assert list(data_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "build", ["~/sandbox", ComposeBuild(context="~/sandbox")], ids=["str", "mapping"]
+)
+async def test_inline_home_build_context_resolves_to_home(
+    build: str | ComposeBuild,
+) -> None:
+    config = ComposeConfig(services={"default": ComposeService(build=build)})
+
+    project = await ComposeProject.create(name=task_project_name("task"), config=config)
+
+    assert project.config is not None
+    built = services(project.config)["default"]["build"]
+    context = built["context"] if isinstance(built, dict) else built
+    assert context == os.path.expanduser("~/sandbox")
