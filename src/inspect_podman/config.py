@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
+from typing import Any
 
 from inspect_ai._util.appdirs import inspect_data_dir
 from inspect_ai.util._sandbox.docker.config import _update_build_context
@@ -69,14 +71,64 @@ def auto_compose_dir() -> Path:
     return inspect_data_dir(AUTO_COMPOSE_SUBDIR)
 
 
+# compose project names: lowercase letters, digits, dashes and underscores
+_PROJECT_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
+
+
 def auto_compose_path(project_name: str) -> Path:
     """Return the path of a project's generated compose file."""
-    return (auto_compose_dir() / f"{project_name}.yaml").resolve()
+    if not _PROJECT_NAME.fullmatch(project_name):
+        raise ValueError(f"Invalid compose project name: {project_name!r}")
+    compose_dir = auto_compose_dir().resolve()
+    path = (compose_dir / f"{project_name}.yaml").resolve()
+    if path.parent != compose_dir:
+        raise ValueError(f"Invalid compose project name: {project_name!r}")
+    return path
 
 
 def is_auto_compose_file(file: str, project_name: str) -> bool:
-    """Return True if the file is the compose file generated for the project."""
-    return Path(file).resolve() == auto_compose_path(project_name)
+    """Return True if the file is the compose file generated for the project.
+
+    A project name that is not a valid compose project name (from a container
+    label, say) never matches, so it cannot point outside the directory.
+    """
+    try:
+        path = auto_compose_path(project_name)
+    except ValueError:
+        return False
+    return Path(file).resolve() == path
+
+
+_REMOTE_CONTEXT = re.compile(r"^(https?|git|ssh)://|^git@", re.IGNORECASE)
+
+
+def check_inline_build_contexts(config: dict[str, Any]) -> None:
+    """Refuse inline build contexts that cannot be resolved as local paths.
+
+    Relative build contexts in a generated file are resolved against a base
+    directory. Remote contexts and contexts with variables would be broken
+    by that, so they must come from a compose file instead.
+
+    Raises:
+        ValueError: A service's build context is remote or uses a variable.
+    """
+    for name, service in (config.get("services") or {}).items():
+        build = service.get("build") if isinstance(service, dict) else None
+        context = build.get("context") if isinstance(build, dict) else build
+        if not isinstance(context, str):
+            continue
+        if _REMOTE_CONTEXT.match(context):
+            raise ValueError(
+                f"Service '{name}' has a remote build context ({context}). "
+                "Remote build contexts are not supported in an inline "
+                "ComposeConfig. Use a compose file instead."
+            )
+        if "$" in context:
+            raise ValueError(
+                f"Service '{name}' has a variable in its build context "
+                f"({context}). Variables in build contexts are not supported "
+                "in an inline ComposeConfig. Use a compose file instead."
+            )
 
 
 def is_dockerfile(file: str) -> bool:

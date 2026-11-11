@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from inspect_podman import config as podman_config
 from inspect_podman import podman
 from inspect_podman.cleanup import (
     auto_compose_files,
+    cli_cleanup,
     project_cleanup,
     project_cleanup_shutdown,
     project_cleanup_startup,
@@ -256,3 +258,75 @@ async def test_concurrent_inline_samples_keep_their_own_services(
     assert not Path(b.config).exists()
     assert list(data_dir.iterdir()) == []
     assert list(work_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize("prefix", ["io.podman.compose", "com.docker.compose"])
+@pytest.mark.parametrize("case", ["absolute", "traversal", "generated"])
+async def test_cli_cleanup_deletes_only_generated_files(
+    monkeypatch: pytest.MonkeyPatch,
+    work_dir: Path,
+    data_dir: Path,
+    prefix: str,
+    case: str,
+) -> None:
+    victim = work_dir / "victim" / "compose.yaml"
+    victim.parent.mkdir()
+    victim.write_text("services:\n  default:\n    image: alpine\n")
+    generated = data_dir / "inspect-task-iabcdef.yaml"
+    generated.write_text("services:\n  default:\n    image: alpine\n")
+    project, config = {
+        "absolute": ((work_dir / "victim" / "compose").as_posix(), victim),
+        "traversal": ("../work/victim/compose", victim),
+        "generated": ("inspect-task-iabcdef", generated),
+    }[case]
+    container = {
+        "Id": "abc123",
+        "Names": ["sandbox_1"],
+        "Labels": {
+            f"{prefix}.project": project,
+            f"{prefix}.project.working_dir": config.parent.as_posix(),
+            f"{prefix}.project.config_files": config.name,
+        },
+    }
+
+    async def podman_ps(*args: Any, **kwargs: Any) -> ExecResult[str]:
+        return ExecResult(
+            success=True, returncode=0, stdout=json.dumps([container]), stderr=""
+        )
+
+    monkeypatch.setattr("inspect_podman.cleanup.subprocess", podman_ps)
+    await cli_cleanup("sandbox_1")
+
+    assert victim.exists()
+    assert generated.exists() == (case != "generated")
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        "https://github.com/docker-library/hello-world.git",
+        ComposeBuild(context="git@github.com:docker-library/hello-world.git"),
+        "ssh://git@example.com/repo.git",
+    ],
+)
+async def test_inline_remote_build_context_is_refused(
+    build: str | ComposeBuild, data_dir: Path
+) -> None:
+    config = ComposeConfig(services={"default": ComposeService(build=build)})
+
+    with pytest.raises(ValueError, match="Remote build contexts are not supported"):
+        await ComposeProject.create(name=task_project_name("task"), config=config)
+    assert list(data_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "build", ["${BUILD_CONTEXT}", ComposeBuild(context="$BUILD_CONTEXT/app")]
+)
+async def test_inline_build_context_variable_is_refused(
+    build: str | ComposeBuild, data_dir: Path
+) -> None:
+    config = ComposeConfig(services={"default": ComposeService(build=build)})
+
+    with pytest.raises(ValueError, match="Variables in build contexts"):
+        await ComposeProject.create(name=task_project_name("task"), config=config)
+    assert list(data_dir.iterdir()) == []
