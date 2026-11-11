@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -48,7 +49,7 @@ class ComposeProject:
                 default_flow_style=False,
                 sort_keys=False,
             )
-            config = auto_compose_file(config_yaml, name)
+            config = auto_compose_file(config_yaml, name, base_dir=os.getcwd())
         elif config is not None:
             raise ValueError(
                 "Unsupported config type: "
@@ -59,7 +60,7 @@ class ComposeProject:
             config = auto_compose_file(
                 COMPOSE_DOCKERFILE_YAML.format(dockerfile=config_path.name),
                 name,
-                config_path.parent.as_posix(),
+                base_dir=config_path.parent.as_posix(),
             )
         elif config_path:
             config = config_path.as_posix()

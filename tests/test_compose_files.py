@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any
 
@@ -6,6 +7,7 @@ import pytest
 import yaml
 from inspect_ai.util import ComposeBuild, ComposeConfig, ComposeService, ExecResult
 
+from inspect_podman import config as podman_config
 from inspect_podman import podman
 from inspect_podman.cleanup import (
     auto_compose_files,
@@ -20,18 +22,38 @@ from inspect_podman.util import ComposeProject, task_project_name
 pytestmark = pytest.mark.anyio
 
 
-@pytest.fixture(params=["asyncio", "trio"])
-def anyio_backend(request: pytest.FixtureRequest) -> str:
-    return str(request.param)
+@pytest.fixture
+def anyio_backend() -> str:
+    # the provider calls asyncio directly, so it runs under asyncio only
+    return "asyncio"
+
+
+@pytest.fixture
+def data_dir(tmp_path: Path) -> Path:
+    """The central auto-compose directory the tests use."""
+    path = tmp_path / "data"
+    path.mkdir()
+    return path
+
+
+@pytest.fixture
+def work_dir(tmp_path: Path) -> Path:
+    """The task directory: the working directory of every test."""
+    path = tmp_path / "work"
+    path.mkdir()
+    return path.resolve()
 
 
 @pytest.fixture(autouse=True)
-def no_podman(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[str]:
-    """Run in an empty directory with every Podman call stubbed out.
+def no_podman(
+    monkeypatch: pytest.MonkeyPatch, data_dir: Path, work_dir: Path
+) -> list[str]:
+    """Run in an empty task directory with every Podman call stubbed out.
 
     Returns the compose files `compose_build` was called with.
     """
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.chdir(work_dir)
+    monkeypatch.setattr(podman_config, "auto_compose_dir", lambda: data_dir)
     built: list[str] = []
 
     async def noop(*args: Any, **kwargs: Any) -> None:
@@ -52,10 +74,10 @@ def no_podman(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[str]:
     return built
 
 
-def inline_config(service: str) -> ComposeConfig:
+def inline_config(service: str, context: str = "ctx") -> ComposeConfig:
     return ComposeConfig(
         services={
-            service: ComposeService(image="alpine", build=ComposeBuild(context="ctx"))
+            service: ComposeService(image="alpine", build=ComposeBuild(context=context))
         }
     )
 
@@ -63,6 +85,14 @@ def inline_config(service: str) -> ComposeConfig:
 def services(file: str) -> dict[str, Any]:
     with open(file, encoding="utf-8") as handle:
         return dict(yaml.safe_load(handle)["services"])
+
+
+def snapshot(directory: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(directory).as_posix(): path.read_bytes()
+        for path in sorted(directory.rglob("*"))
+        if path.is_file()
+    }
 
 
 async def sample_project(config: str | ComposeConfig | None) -> ComposeProject:
@@ -93,14 +123,16 @@ async def failing_task_init(
 
 
 async def test_failed_setup_keeps_active_inline_sample(
-    monkeypatch: pytest.MonkeyPatch, no_podman: list[str], tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, no_podman: list[str], data_dir: Path
 ) -> None:
     project_cleanup_startup()
     a = await sample_project(inline_config("a"))
     assert a.config is not None
-    # relative paths in the generated file resolve against the working directory
-    assert Path(a.config).parent == tmp_path.resolve()
-    assert services(a.config) == {"a": {"image": "alpine", "build": {"context": "ctx"}}}
+    assert Path(a.config).parent == data_dir.resolve()
+    # a relative build context still resolves against the working directory
+    assert services(a.config) == {
+        "a": {"image": "alpine", "build": {"context": os.path.join(os.getcwd(), "ctx")}}
+    }
 
     b_file = await failing_task_init(monkeypatch, no_podman, inline_config("b"))
 
@@ -132,31 +164,57 @@ async def test_setup_removes_its_own_file(no_podman: list[str]) -> None:
     assert not Path(no_podman[0]).exists()
 
 
-async def test_explicit_dockerfile_generates_file_beside_it(tmp_path: Path) -> None:
-    env = tmp_path / "env"
+async def test_explicit_dockerfile_builds_from_its_directory(work_dir: Path) -> None:
+    env = work_dir / "env"
     env.mkdir()
     (env / "Dockerfile").write_text("FROM alpine\n")
 
     project_cleanup_startup()
     a = await sample_project("env/Dockerfile")
     assert a.config is not None
-    assert Path(a.config).parent == env.resolve()
     assert services(a.config)["default"]["build"] == {
-        "context": ".",
+        "context": env.as_posix(),
         "dockerfile": "Dockerfile",
     }
 
 
-async def test_explicit_compose_file_is_used_and_kept(
-    monkeypatch: pytest.MonkeyPatch, no_podman: list[str], tmp_path: Path
+@pytest.mark.parametrize("case", ["explicit", "discovered", "inline"])
+async def test_build_context_unchanged_across_projects(
+    case: str, work_dir: Path
 ) -> None:
-    compose = tmp_path / "compose.yaml"
+    (work_dir / "Dockerfile").write_text("FROM alpine\nCOPY . /src\n")
+    (work_dir / "app.py").write_text("print('hello')\n")
+    before = snapshot(work_dir)
+    config: str | ComposeConfig | None = {
+        "explicit": "Dockerfile",
+        "discovered": None,
+        "inline": inline_config("default", context="."),
+    }[case]
+
+    project_cleanup_startup()
+    projects = [await sample_project(config) for _ in range(2)]
+
+    assert snapshot(work_dir) == before
+    for project in projects:
+        assert project.config is not None
+        assert services(project.config)["default"]["build"]["context"] == (
+            work_dir.as_posix()
+        )
+
+
+async def test_explicit_compose_file_is_used_and_kept(
+    monkeypatch: pytest.MonkeyPatch,
+    no_podman: list[str],
+    work_dir: Path,
+    data_dir: Path,
+) -> None:
+    compose = work_dir / "compose.yaml"
     compose.write_text("services:\n  default:\n    image: alpine\n")
 
     project_cleanup_startup()
     a = await sample_project("compose.yaml")
     discovered = await sample_project(None)
-    assert a.config == compose.resolve().as_posix()
+    assert a.config == compose.as_posix()
     assert discovered.config == a.config
     assert auto_compose_files() == set()
 
@@ -166,11 +224,12 @@ async def test_explicit_compose_file_is_used_and_kept(
     await project_cleanup_shutdown(True)
 
     assert compose.exists()
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["compose.yaml"]
+    assert sorted(p.name for p in work_dir.iterdir()) == ["compose.yaml"]
+    assert list(data_dir.iterdir()) == []
 
 
 async def test_concurrent_inline_samples_keep_their_own_services(
-    tmp_path: Path,
+    work_dir: Path, data_dir: Path
 ) -> None:
     project_cleanup_startup()
     projects: dict[str, ComposeProject] = {}
@@ -195,4 +254,5 @@ async def test_concurrent_inline_samples_keep_their_own_services(
 
     await project_cleanup_shutdown(True)
     assert not Path(b.config).exists()
-    assert list(tmp_path.iterdir()) == []
+    assert list(data_dir.iterdir()) == []
+    assert list(work_dir.iterdir()) == []
