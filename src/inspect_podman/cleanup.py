@@ -33,9 +33,16 @@ def project_startup(project: ComposeProject) -> None:
 
 
 def project_record_auto_compose(project: ComposeProject) -> None:
-    """Track auto-generated compose files for cleanup."""
-    if project.config and is_auto_compose_file(project.config):
+    """Track the project's generated compose file for cleanup."""
+    if project.config and is_auto_compose_file(project.config, project.name):
         auto_compose_files().add(project.config)
+
+
+def project_discard_auto_compose(project: ComposeProject) -> None:
+    """Remove the project's generated compose file and stop tracking it."""
+    if project.config and is_auto_compose_file(project.config, project.name):
+        auto_compose_files().discard(project.config)
+        safe_cleanup_auto_compose(project.config)
 
 
 async def project_cleanup(project: ComposeProject, quiet: bool = True) -> None:
@@ -43,6 +50,7 @@ async def project_cleanup(project: ComposeProject, quiet: bool = True) -> None:
     await compose_down(project=project, quiet=quiet)
     if project in running_projects():
         running_projects().remove(project)
+    project_discard_auto_compose(project)
 
 
 async def project_cleanup_shutdown(cleanup: bool) -> None:
@@ -153,8 +161,13 @@ async def cli_cleanup(identifier: str | None) -> None:
 
     for project in projects:
         for container in containers:
-            if container["project"] == project and container["config"]:
-                safe_cleanup_auto_compose(container["config"])
+            config = container["config"]
+            if (
+                container["project"] == project
+                and config
+                and is_auto_compose_file(config, project)
+            ):
+                safe_cleanup_auto_compose(config)
 
 
 async def _all_compose_containers() -> list[dict[str, str | None]]:

@@ -99,12 +99,13 @@ export INSPECT_PODMAN_COMPOSE=podman-compose
 The provider searches the task directory in this order:
 
 1. `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`
-2. `.compose.yaml` (auto-generated)
-3. `Containerfile`
-4. `Dockerfile`
-5. A default compose that uses the `aisiuk/inspect-tool-support` image
+2. `Containerfile`
+3. `Dockerfile`
+4. A default compose that uses the `aisiuk/inspect-tool-support` image
 
 If you provide `sandbox=("podman", "path/to/compose.yaml")`, that file is used directly.
+
+When there is no compose file, or the config is an inline `ComposeConfig`, the provider writes a compose file named `.compose-<project>.yaml` in the task directory (next to the Dockerfile if you pass a Dockerfile path). Each sandbox project gets its own file, which is removed when that project is cleaned up.
 
 ## Healthchecks
 

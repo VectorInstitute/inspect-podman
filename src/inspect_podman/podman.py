@@ -29,7 +29,7 @@ from .cleanup import (
     project_cleanup,
     project_cleanup_shutdown,
     project_cleanup_startup,
-    project_record_auto_compose,
+    project_discard_auto_compose,
     project_startup,
 )
 from .compose import (
@@ -73,11 +73,11 @@ class PodmanSandboxEnvironment(SandboxEnvironment):
         await validate_prereqs()
         project_cleanup_startup()
 
+        project: ComposeProject | None = None
         try:
             project = await ComposeProject.create(
                 name=task_project_name(task_name), config=config
             )
-            project_record_auto_compose(project)
 
             await compose_build(project)
             await compose_cleanup_images(project, timeout=60)
@@ -111,6 +111,11 @@ class PodmanSandboxEnvironment(SandboxEnvironment):
         except BaseException as ex:
             await project_cleanup_shutdown(True)
             raise ex
+        finally:
+            # samples generate their own compose files, so this one is only
+            # needed for the build and pull above
+            if project is not None:
+                project_discard_auto_compose(project)
 
     @classmethod
     async def sample_init(
