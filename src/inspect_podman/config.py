@@ -102,6 +102,14 @@ def is_auto_compose_file(file: str, project_name: str) -> bool:
 _REMOTE_CONTEXT = re.compile(r"^(https?|git|ssh)://|^git@", re.IGNORECASE)
 
 
+def _escape_dollars(path: str) -> str:
+    """Escape `$` in a path written into a compose file.
+
+    Compose reads `$` as the start of a variable; `$$` is a literal `$`.
+    """
+    return path.replace("$", "$$")
+
+
 def prepare_inline_build_contexts(config: dict[str, Any]) -> None:
     """Check inline build contexts and expand home-relative ones in place.
 
@@ -132,7 +140,7 @@ def prepare_inline_build_contexts(config: dict[str, Any]) -> None:
                 "in an inline ComposeConfig. Use a compose file instead."
             )
         if context.startswith("~"):
-            expanded = os.path.expanduser(context)
+            expanded = _escape_dollars(os.path.expanduser(context))
             if isinstance(build, dict):
                 build["context"] = expanded
             else:
@@ -194,7 +202,7 @@ def auto_compose_file(
     are resolved against `base_dir`.
     """
     if base_dir:
-        contents = _update_build_context(contents, base_dir)
+        contents = _update_build_context(contents, _escape_dollars(base_dir))
 
     path = auto_compose_path(project_name)
     with open(path, "w", encoding="utf-8") as handle:

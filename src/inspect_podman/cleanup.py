@@ -47,10 +47,13 @@ def project_discard_auto_compose(project: ComposeProject) -> None:
 
 async def project_cleanup(project: ComposeProject, quiet: bool = True) -> None:
     """Stop and cleanup a project compose stack."""
-    await compose_down(project=project, quiet=quiet)
+    stopped = await compose_down(project=project, quiet=quiet)
     if project in running_projects():
         running_projects().remove(project)
-    project_discard_auto_compose(project)
+    # keep the generated file (still tracked for shutdown) if teardown failed,
+    # so a later `compose down` can still use it
+    if stopped:
+        project_discard_auto_compose(project)
 
 
 async def project_cleanup_shutdown(cleanup: bool) -> None:
