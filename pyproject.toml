@@ -8,7 +8,7 @@ authors = [
     {name = "Inspect Podman Maintainers"}
 ]
 dependencies = [
-    "inspect_ai>=0.3.163",
+    "inspect_ai>=0.3.269",
     "PyYAML>=6.0",
     "rich>=13.0",
 ]

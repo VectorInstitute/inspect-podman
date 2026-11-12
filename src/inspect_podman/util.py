@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from inspect_ai.util import ComposeConfig
 from .config import (
     COMPOSE_DOCKERFILE_YAML,
     auto_compose_file,
-    ensure_auto_compose_file,
+    check_inline_build_contexts,
     is_dockerfile,
     resolve_compose_file,
 )
@@ -44,12 +45,16 @@ class ComposeProject:
         if isinstance(config, str):
             config_path = Path(config).resolve()
         elif isinstance(config, ComposeConfig):
+            config_data = config.model_dump(
+                mode="json", by_alias=True, exclude_none=True
+            )
+            check_inline_build_contexts(config_data)
             config_yaml = yaml.dump(
-                config.model_dump(mode="json", by_alias=True, exclude_none=True),
+                config_data,
                 default_flow_style=False,
                 sort_keys=False,
             )
-            config = auto_compose_file(config_yaml)
+            config = auto_compose_file(config_yaml, name, base_dir=os.getcwd())
         elif config is not None:
             raise ValueError(
                 "Unsupported config type: "
@@ -59,14 +64,13 @@ class ComposeProject:
         if config_path and is_dockerfile(config_path.name):
             config = auto_compose_file(
                 COMPOSE_DOCKERFILE_YAML.format(dockerfile=config_path.name),
-                config_path.parent.as_posix(),
+                name,
+                base_dir=config_path.parent.as_posix(),
             )
         elif config_path:
             config = config_path.as_posix()
         elif config is None:
-            config = resolve_compose_file()
-
-        ensure_auto_compose_file(config)
+            config = resolve_compose_file(name)
 
         return ComposeProject(
             name=name,

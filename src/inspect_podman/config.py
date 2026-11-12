@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
+from typing import Any
+
+from inspect_ai._util.appdirs import inspect_data_dir
+from inspect_ai.util._sandbox.docker.config import _update_build_context
 
 COMPOSE_FILES = [
     "compose.yaml",
@@ -15,7 +20,7 @@ COMPOSE_FILES = [
 DOCKERFILE = "Dockerfile"
 CONTAINERFILE = "Containerfile"
 
-AUTO_COMPOSE_YAML = ".compose.yaml"
+AUTO_COMPOSE_SUBDIR = "podman-compose"
 
 COMPOSE_COMMENT = """# inspect auto-generated compose file
 # (will be removed when task is complete)"""
@@ -61,14 +66,72 @@ def has_containerfile(parent: str = "") -> bool:
     return os.path.isfile(os.path.join(parent, CONTAINERFILE))
 
 
-def has_auto_compose_file(parent: str = "") -> bool:
-    """Return True if the auto-compose file exists in the directory."""
-    return os.path.isfile(os.path.join(parent, AUTO_COMPOSE_YAML))
+def auto_compose_dir() -> Path:
+    """Return the directory that holds generated compose files.
+
+    This is the `podman-compose` folder of Inspect's data directory.
+    """
+    return inspect_data_dir(AUTO_COMPOSE_SUBDIR)
 
 
-def is_auto_compose_file(file: str) -> bool:
-    """Return True if the file is the auto-compose file."""
-    return os.path.basename(file) == AUTO_COMPOSE_YAML
+# compose project names: lowercase letters, digits, dashes and underscores
+_PROJECT_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
+
+
+def auto_compose_path(project_name: str) -> Path:
+    """Return the path of a project's generated compose file."""
+    if not _PROJECT_NAME.fullmatch(project_name):
+        raise ValueError(f"Invalid compose project name: {project_name!r}")
+    compose_dir = auto_compose_dir().resolve()
+    path = (compose_dir / f"{project_name}.yaml").resolve()
+    if path.parent != compose_dir:
+        raise ValueError(f"Invalid compose project name: {project_name!r}")
+    return path
+
+
+def is_auto_compose_file(file: str, project_name: str) -> bool:
+    """Return True if the file is the compose file generated for the project.
+
+    A project name that is not a valid compose project name (from a container
+    label, say) never matches, so it cannot point outside the directory.
+    """
+    try:
+        path = auto_compose_path(project_name)
+    except ValueError:
+        return False
+    return Path(file).resolve() == path
+
+
+_REMOTE_CONTEXT = re.compile(r"^(https?|git|ssh)://|^git@", re.IGNORECASE)
+
+
+def check_inline_build_contexts(config: dict[str, Any]) -> None:
+    """Refuse inline build contexts that cannot be resolved.
+
+    Relative build contexts in a generated file are resolved against a base
+    directory. Remote contexts and contexts with variables would be broken
+    by that, so they must come from a compose file instead.
+
+    Raises:
+        ValueError: A service's build context is remote or uses a variable.
+    """
+    for name, service in (config.get("services") or {}).items():
+        build = service.get("build") if isinstance(service, dict) else None
+        context = build.get("context") if isinstance(build, dict) else build
+        if not isinstance(context, str):
+            continue
+        if _REMOTE_CONTEXT.match(context):
+            raise ValueError(
+                f"Service '{name}' has a remote build context ({context}). "
+                "Remote build contexts are not supported in an inline "
+                "ComposeConfig. Use a compose file instead."
+            )
+        if "$" in context:
+            raise ValueError(
+                f"Service '{name}' has a variable in its build context "
+                f"({context}). Variables in build contexts are not supported "
+                "in an inline ComposeConfig. Use a compose file instead."
+            )
 
 
 def is_dockerfile(file: str) -> bool:
@@ -77,48 +140,58 @@ def is_dockerfile(file: str) -> bool:
     return path.name in {DOCKERFILE, CONTAINERFILE}
 
 
-def resolve_compose_file(parent: str = "") -> str:
-    """Resolve the compose file or synthesize one if needed."""
+def resolve_compose_file(project_name: str, parent: str = "") -> str:
+    """Resolve the compose file or synthesize one for the project if needed."""
     compose = find_compose_file(parent)
     if compose is not None:
         return Path(os.path.join(parent, compose)).resolve().as_posix()
 
-    if has_auto_compose_file(parent):
-        return Path(os.path.join(parent, AUTO_COMPOSE_YAML)).resolve().as_posix()
+    base_dir = Path(parent).resolve().as_posix() if parent else os.getcwd()
 
     if has_containerfile(parent):
         return auto_compose_file(
-            COMPOSE_DOCKERFILE_YAML.format(dockerfile=CONTAINERFILE), parent
+            COMPOSE_DOCKERFILE_YAML.format(dockerfile=CONTAINERFILE),
+            project_name,
+            base_dir=base_dir,
         )
 
     if has_dockerfile(parent):
         return auto_compose_file(
-            COMPOSE_DOCKERFILE_YAML.format(dockerfile=DOCKERFILE), parent
+            COMPOSE_DOCKERFILE_YAML.format(dockerfile=DOCKERFILE),
+            project_name,
+            base_dir=base_dir,
         )
 
-    return auto_compose_file(COMPOSE_GENERIC_YAML, parent)
-
-
-def ensure_auto_compose_file(file: str | None) -> None:
-    """Ensure auto-compose file is present if referenced."""
-    if file is not None and is_auto_compose_file(file) and not os.path.exists(file):
-        resolve_compose_file(os.path.dirname(file))
+    return auto_compose_file(COMPOSE_GENERIC_YAML, project_name)
 
 
 def safe_cleanup_auto_compose(file: str | None) -> None:
-    """Remove auto-compose file if it exists."""
+    """Remove a generated compose file if it exists.
+
+    Callers check that the file is their project's with `is_auto_compose_file`.
+    """
     if not file:
         return
     try:
-        if is_auto_compose_file(file) and os.path.exists(file):
+        if os.path.exists(file):
             os.unlink(file)
     except Exception:
         pass
 
 
-def auto_compose_file(contents: str, parent: str = "") -> str:
-    """Write and return the auto-compose file path."""
-    path = os.path.join(parent, AUTO_COMPOSE_YAML)
+def auto_compose_file(
+    contents: str, project_name: str, base_dir: str | None = None
+) -> str:
+    """Write the project's generated compose file and return its path.
+
+    The file goes in the central auto-compose directory, outside any build
+    context. As in Inspect's Docker provider, relative `build.context` paths
+    are resolved against `base_dir`.
+    """
+    if base_dir:
+        contents = _update_build_context(contents, base_dir)
+
+    path = auto_compose_path(project_name)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(contents)
-    return Path(path).resolve().as_posix()
+    return path.as_posix()
