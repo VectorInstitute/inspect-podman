@@ -442,3 +442,17 @@ async def test_failed_teardown_keeps_config(
     kept = outcome != "success"
     assert Path(a.config).exists() == kept
     assert (a.config in auto_compose_files()) == kept
+
+
+async def test_first_generated_file_creates_the_folder(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    data_root = tmp_path / "absent"
+    monkeypatch.setattr(podman_config, "auto_compose_dir", REAL_AUTO_COMPOSE_DIR)
+    monkeypatch.setattr(podman_config, "user_data_path", lambda name: data_root / name)
+
+    project = await ComposeProject.create(name=task_project_name("task"), config=None)
+
+    assert project.config is not None
+    assert Path(project.config).parent == (data_root / "inspect_ai/podman-compose")
+    assert list(services(project.config)) == ["default"]
