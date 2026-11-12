@@ -33,7 +33,7 @@ def project_startup(project: ComposeProject) -> None:
 
 
 def project_record_auto_compose(project: ComposeProject) -> None:
-    """Track the project's generated compose file for cleanup."""
+    """Track auto-generated compose files for cleanup."""
     if project.config and is_auto_compose_file(project.config, project.name):
         auto_compose_files().add(project.config)
 
@@ -47,13 +47,9 @@ def project_discard_auto_compose(project: ComposeProject) -> None:
 
 async def project_cleanup(project: ComposeProject, quiet: bool = True) -> None:
     """Stop and cleanup a project compose stack."""
-    stopped = await compose_down(project=project, quiet=quiet)
+    await compose_down(project=project, quiet=quiet)
     if project in running_projects():
         running_projects().remove(project)
-    # keep the generated file (still tracked for shutdown) if teardown failed,
-    # so a later `compose down` can still use it
-    if stopped:
-        project_discard_auto_compose(project)
 
 
 async def project_cleanup_shutdown(cleanup: bool) -> None:

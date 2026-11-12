@@ -105,7 +105,7 @@ The provider searches the task directory in this order:
 
 If you provide `sandbox=("podman", "path/to/compose.yaml")`, that file is used directly.
 
-When there is no compose file, or the config is an inline `ComposeConfig`, the provider writes a compose file for each sandbox project to the `podman-compose` folder of Inspect's data directory, as Inspect's Docker provider does. The file is removed when that project is cleaned up. Relative `build.context` paths in it are resolved against the task directory (or the Dockerfile's directory if you pass a Dockerfile path). Relative volume and `env_file` paths in an inline `ComposeConfig` resolve as they do under Inspect's Docker provider: against that data folder, not the task directory. An inline `ComposeConfig` cannot use a remote build context (a Git or HTTP URL) or a variable in its build context; use a compose file for those.
+When there is no compose file, or the config is an inline `ComposeConfig`, the provider writes a compose file for each sandbox project to the `podman-compose` folder of Inspect's data directory, as Inspect's Docker provider does. The files are removed when the task is complete. Relative `build.context` paths in these files are resolved against the task directory (or the Dockerfile's directory if you pass a Dockerfile path). Relative volume and `env_file` paths in an inline `ComposeConfig` resolve as they do under Inspect's Docker provider: against that data folder, not the task directory. An inline `ComposeConfig` cannot use a remote build context (a Git or HTTP URL) or a variable in its build context; use a compose file for those.
 
 ## Healthchecks
 

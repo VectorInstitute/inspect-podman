@@ -8,7 +8,6 @@ import pytest
 import yaml
 from inspect_ai.util import ComposeBuild, ComposeConfig, ComposeService, ExecResult
 
-from inspect_podman import compose as podman_compose
 from inspect_podman import config as podman_config
 from inspect_podman import podman
 from inspect_podman.cleanup import (
@@ -21,8 +20,6 @@ from inspect_podman.cleanup import (
 )
 from inspect_podman.podman import PodmanSandboxEnvironment
 from inspect_podman.util import ComposeProject, task_project_name
-
-REAL_AUTO_COMPOSE_DIR = podman_config.auto_compose_dir
 
 pytestmark = pytest.mark.anyio
 
@@ -76,10 +73,7 @@ def no_podman(
     monkeypatch.setattr(podman, "compose_cleanup_images", noop)
     monkeypatch.setattr(podman, "compose_pull", pull)
 
-    async def down(*args: Any, **kwargs: Any) -> bool:
-        return True
-
-    monkeypatch.setattr("inspect_podman.cleanup.compose_down", down)
+    monkeypatch.setattr("inspect_podman.cleanup.compose_down", noop)
     return built
 
 
@@ -215,18 +209,11 @@ async def test_explicit_compose_file_is_used_and_kept(
     monkeypatch: pytest.MonkeyPatch,
     no_podman: list[str],
     work_dir: Path,
-    tmp_path: Path,
+    data_dir: Path,
 ) -> None:
     compose = work_dir / "compose.yaml"
     compose.write_text("services:\n  default:\n    image: alpine\n")
-    # an unwritable data location: compose files must not need it
-    data_root = tmp_path / "readonly"
-    data_root.mkdir(mode=0o500)
-    monkeypatch.setattr(podman_config, "auto_compose_dir", REAL_AUTO_COMPOSE_DIR)
-    monkeypatch.setattr(podman_config, "user_data_path", lambda name: data_root / name)
 
-    await PodmanSandboxEnvironment.task_init("task_b", "compose.yaml")
-    await PodmanSandboxEnvironment.task_init("task_b", None)
     project_cleanup_startup()
     a = await sample_project("compose.yaml")
     discovered = await sample_project(None)
@@ -236,31 +223,11 @@ async def test_explicit_compose_file_is_used_and_kept(
 
     b_file = await failing_task_init(monkeypatch, no_podman, "compose.yaml")
     assert b_file == a.config
-    await project_cleanup(a)
-    await project_cleanup(discovered)
     await project_cleanup_shutdown(True)
-
-    container = {
-        "Id": "abc123",
-        "Names": ["sandbox_1"],
-        "Labels": {
-            "io.podman.compose.project": a.name,
-            "io.podman.compose.project.working_dir": work_dir.as_posix(),
-            "io.podman.compose.project.config_files": "compose.yaml",
-        },
-    }
-
-    async def podman_ps(*args: Any, **kwargs: Any) -> ExecResult[str]:
-        return ExecResult(
-            success=True, returncode=0, stdout=json.dumps([container]), stderr=""
-        )
-
-    monkeypatch.setattr("inspect_podman.cleanup.subprocess", podman_ps)
-    await cli_cleanup("sandbox_1")
 
     assert compose.exists()
     assert sorted(p.name for p in work_dir.iterdir()) == ["compose.yaml"]
-    assert list(data_root.iterdir()) == []
+    assert list(data_dir.iterdir()) == []
 
 
 async def test_concurrent_inline_samples_keep_their_own_services(
@@ -282,13 +249,13 @@ async def test_concurrent_inline_samples_keep_their_own_services(
     assert list(services(a.config)) == ["a"]
     assert list(services(b.config)) == ["b"]
 
+    # as in Inspect's Docker provider, a sample's file stays until shutdown
     await project_cleanup(a)
-    assert not Path(a.config).exists()
+    assert list(services(a.config)) == ["a"]
     assert list(services(b.config)) == ["b"]
-    assert auto_compose_files() == {b.config}
+    assert auto_compose_files() == {a.config, b.config}
 
     await project_cleanup_shutdown(True)
-    assert not Path(b.config).exists()
     assert list(data_dir.iterdir()) == []
     assert list(work_dir.iterdir()) == []
 
@@ -363,96 +330,3 @@ async def test_inline_build_context_variable_is_refused(
     with pytest.raises(ValueError, match="Variables in build contexts"):
         await ComposeProject.create(name=task_project_name("task"), config=config)
     assert list(data_dir.iterdir()) == []
-
-
-@pytest.mark.parametrize(
-    "build", ["~/sandbox", ComposeBuild(context="~/sandbox")], ids=["str", "mapping"]
-)
-async def test_inline_home_build_context_resolves_to_home(
-    build: str | ComposeBuild,
-) -> None:
-    config = ComposeConfig(services={"default": ComposeService(build=build)})
-
-    project = await ComposeProject.create(name=task_project_name("task"), config=config)
-
-    assert project.config is not None
-    built = services(project.config)["default"]["build"]
-    context = built["context"] if isinstance(built, dict) else built
-    assert context == os.path.expanduser("~/sandbox")
-
-
-@pytest.mark.parametrize(
-    "case", ["explicit", "discovered", "inline-str", "inline-mapping", "home"]
-)
-async def test_inserted_dollar_is_escaped(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, work_dir: Path, case: str
-) -> None:
-    task_dir = work_dir / "price$USD"
-    task_dir.mkdir()
-    (task_dir / "Dockerfile").write_text("FROM alpine\n")
-    monkeypatch.chdir(task_dir)
-    home = tmp_path / "home$USD"
-    monkeypatch.setenv("HOME", home.as_posix())
-    config, expected = {
-        "explicit": ("Dockerfile", task_dir),
-        "discovered": (None, task_dir),
-        "inline-str": (
-            ComposeConfig(services={"default": ComposeService(build="ctx")}),
-            task_dir / "ctx",
-        ),
-        "inline-mapping": (inline_config("default"), task_dir / "ctx"),
-        "home": (
-            ComposeConfig(services={"default": ComposeService(build="~/sandbox")}),
-            home / "sandbox",
-        ),
-    }[case]
-
-    project = await ComposeProject.create(name=task_project_name("task"), config=config)
-
-    assert project.config is not None
-    built = services(project.config)["default"]["build"]
-    context = built["context"] if isinstance(built, dict) else built
-    # compose reads `$$` as a literal `$`
-    assert context == expected.as_posix().replace("$", "$$")
-
-
-@pytest.mark.parametrize("outcome", ["nonzero", "timeout", "success"])
-async def test_failed_teardown_keeps_config(
-    monkeypatch: pytest.MonkeyPatch, outcome: str
-) -> None:
-    async def compose_command(*args: Any, **kwargs: Any) -> ExecResult[str]:
-        if outcome == "timeout":
-            raise TimeoutError()
-        success = outcome == "success"
-        return ExecResult(
-            success=success, returncode=0 if success else 1, stdout="", stderr=""
-        )
-
-    monkeypatch.setattr(podman_compose, "compose_command", compose_command)
-    monkeypatch.setattr(
-        "inspect_podman.cleanup.compose_down", podman_compose.compose_down
-    )
-
-    project_cleanup_startup()
-    a = await sample_project(inline_config("a"))
-    assert a.config is not None
-
-    await project_cleanup(a)
-
-    kept = outcome != "success"
-    assert Path(a.config).exists() == kept
-    assert (a.config in auto_compose_files()) == kept
-
-
-async def test_first_generated_file_creates_the_folder(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    data_root = tmp_path / "absent"
-    monkeypatch.setattr(podman_config, "auto_compose_dir", REAL_AUTO_COMPOSE_DIR)
-    monkeypatch.setattr(podman_config, "user_data_path", lambda name: data_root / name)
-
-    project = await ComposeProject.create(name=task_project_name("task"), config=None)
-
-    assert project.config is not None
-    assert Path(project.config).parent == (data_root / "inspect_ai/podman-compose")
-    assert list(services(project.config)) == ["default"]

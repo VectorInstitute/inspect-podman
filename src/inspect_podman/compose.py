@@ -128,13 +128,8 @@ async def compose_wait_for_health(
         await asyncio.sleep(delay)
 
 
-async def compose_down(project: ComposeProject, quiet: bool = True) -> bool:
-    """Stop compose services for a project.
-
-    Returns:
-        True if the services were stopped; False if the command failed or
-        timed out (the failure is logged).
-    """
+async def compose_down(project: ComposeProject, quiet: bool = True) -> None:
+    """Stop compose services for a project."""
     cwd = os.path.dirname(project.config) if project.config else None
     timeout = 60
     try:
@@ -147,14 +142,12 @@ async def compose_down(project: ComposeProject, quiet: bool = True) -> bool:
         )
         if not result.success:
             logger.warning(f"Failed to stop podman services: {result.stderr}")
-        return result.success
     except TimeoutError:
         logger.warning(
             "Podman compose down timed out after %s seconds for project '%s'.",
             timeout,
             project.name,
         )
-        return False
 
 
 async def compose_build(project: ComposeProject, capture_output: bool = False) -> None:

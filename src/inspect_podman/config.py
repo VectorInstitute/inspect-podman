@@ -7,9 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from inspect_ai._util.constants import PKG_NAME
+from inspect_ai._util.appdirs import inspect_data_dir
 from inspect_ai.util._sandbox.docker.config import _update_build_context
-from platformdirs import user_data_path
 
 COMPOSE_FILES = [
     "compose.yaml",
@@ -24,7 +23,7 @@ CONTAINERFILE = "Containerfile"
 AUTO_COMPOSE_SUBDIR = "podman-compose"
 
 COMPOSE_COMMENT = """# inspect auto-generated compose file
-# (will be removed when its project is cleaned up)"""
+# (will be removed when task is complete)"""
 
 COMPOSE_GENERIC_YAML = f"""{COMPOSE_COMMENT}
 services:
@@ -70,10 +69,9 @@ def has_containerfile(parent: str = "") -> bool:
 def auto_compose_dir() -> Path:
     """Return the directory that holds generated compose files.
 
-    This is the `podman-compose` folder of Inspect's data directory. It is
-    not created here: only writing a generated file creates it.
+    This is the `podman-compose` folder of Inspect's data directory.
     """
-    return user_data_path(PKG_NAME) / AUTO_COMPOSE_SUBDIR
+    return inspect_data_dir(AUTO_COMPOSE_SUBDIR)
 
 
 # compose project names: lowercase letters, digits, dashes and underscores
@@ -107,22 +105,12 @@ def is_auto_compose_file(file: str, project_name: str) -> bool:
 _REMOTE_CONTEXT = re.compile(r"^(https?|git|ssh)://|^git@", re.IGNORECASE)
 
 
-def _escape_dollars(path: str) -> str:
-    """Escape `$` in a path written into a compose file.
-
-    Compose reads `$` as the start of a variable; `$$` is a literal `$`.
-    """
-    return path.replace("$", "$$")
-
-
-def prepare_inline_build_contexts(config: dict[str, Any]) -> None:
-    """Check inline build contexts and expand home-relative ones in place.
+def check_inline_build_contexts(config: dict[str, Any]) -> None:
+    """Refuse inline build contexts that cannot be resolved.
 
     Relative build contexts in a generated file are resolved against a base
     directory. Remote contexts and contexts with variables would be broken
-    by that, so they must come from a compose file instead. A context that
-    starts with `~` is expanded to the user's home directory first, as
-    Compose does.
+    by that, so they must come from a compose file instead.
 
     Raises:
         ValueError: A service's build context is remote or uses a variable.
@@ -144,12 +132,6 @@ def prepare_inline_build_contexts(config: dict[str, Any]) -> None:
                 f"({context}). Variables in build contexts are not supported "
                 "in an inline ComposeConfig. Use a compose file instead."
             )
-        if context.startswith("~"):
-            expanded = _escape_dollars(os.path.expanduser(context))
-            if isinstance(build, dict):
-                build["context"] = expanded
-            else:
-                service["build"] = expanded
 
 
 def is_dockerfile(file: str) -> bool:
@@ -207,9 +189,8 @@ def auto_compose_file(
     are resolved against `base_dir`.
     """
     if base_dir:
-        contents = _update_build_context(contents, _escape_dollars(base_dir))
+        contents = _update_build_context(contents, base_dir)
 
-    auto_compose_dir().mkdir(parents=True, exist_ok=True)
     path = auto_compose_path(project_name)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(contents)
