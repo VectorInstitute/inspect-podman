@@ -7,6 +7,7 @@ import anyio
 import pytest
 import yaml
 from inspect_ai.util import ComposeBuild, ComposeConfig, ComposeService, ExecResult
+from inspect_ai.util._sandbox.lifecycle import sandbox_lifecycle_scope
 
 from inspect_podman import config as podman_config
 from inspect_podman import podman
@@ -329,4 +330,67 @@ async def test_inline_build_context_variable_is_refused(
 
     with pytest.raises(ValueError, match="Variables in build contexts"):
         await ComposeProject.create(name=task_project_name("task"), config=config)
+    assert list(data_dir.iterdir()) == []
+
+
+@pytest.fixture
+def downs(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the projects `compose down` is called for."""
+    names: list[str] = []
+
+    async def down(project: ComposeProject, *args: Any, **kwargs: Any) -> None:
+        names.append(project.name)
+
+    monkeypatch.setattr("inspect_podman.cleanup.compose_down", down)
+    return names
+
+
+@pytest.mark.parametrize("setup", ["success", "failure"])
+async def test_late_setup_keeps_the_batch_registry(
+    monkeypatch: pytest.MonkeyPatch,
+    no_podman: list[str],
+    downs: list[str],
+    data_dir: Path,
+    setup: str,
+) -> None:
+    with sandbox_lifecycle_scope():
+        await PodmanSandboxEnvironment.task_init("task_a", None)
+        a = await sample_project(inline_config("a"))
+        done = await sample_project(inline_config("done"))
+        await project_cleanup(done)
+        assert a.config is not None and done.config is not None
+
+        # a late setup (a TaskSource task) while sample `a` is running
+        if setup == "success":
+            await PodmanSandboxEnvironment.task_init("task_b", inline_config("b"))
+        else:
+            await failing_task_init(monkeypatch, no_podman, inline_config("b"))
+        assert downs == [done.name]
+        assert list(services(a.config)) == ["a"]
+
+        await PodmanSandboxEnvironment.task_cleanup("task_a", None, True)
+
+    assert sorted(downs) == sorted([done.name, a.name])
+    assert list(data_dir.iterdir()) == []
+
+
+async def test_sample_source_feeder_registers_with_the_batch(
+    downs: list[str], data_dir: Path
+) -> None:
+    feeder_projects: list[ComposeProject] = []
+
+    async def feeder() -> None:
+        # a SampleSource feeder initializes its config in its own task
+        await PodmanSandboxEnvironment.task_init("task_b", inline_config("b"))
+        feeder_projects.append(await sample_project(inline_config("b")))
+
+    with sandbox_lifecycle_scope():
+        await PodmanSandboxEnvironment.task_init("task_a", None)
+        a = await sample_project(inline_config("a"))
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(feeder)
+
+        await PodmanSandboxEnvironment.task_cleanup("task_a", None, True)
+
+    assert sorted(downs) == sorted([a.name, feeder_projects[0].name])
     assert list(data_dir.iterdir()) == []

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 from contextvars import ContextVar
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Awaitable, Callable, Set
 
 import anyio
 from inspect_ai._util._async import coro_print_exceptions
 from inspect_ai.util import subprocess
+from inspect_ai.util._anyio import safe_current_task_id
+from inspect_ai.util._sandbox.lifecycle import sandbox_lifecycle_state
 from rich import box, print
 from rich.panel import Panel
 from rich.table import Table
@@ -19,11 +22,63 @@ from .config import is_auto_compose_file, safe_cleanup_auto_compose
 from .util import ComposeProject, is_inspect_project
 
 
+@dataclass
+class PodmanCleanupState:
+    """The Podman resources one eval batch has started and must clean up.
+
+    As in Inspect's Docker provider, this lives on the batch's sandbox
+    lifecycle scope, so a late `task_init` (a `TaskSource` task, or a
+    `SampleSource` feeder) registers with the same object as the samples.
+    """
+
+    running_projects: list[ComposeProject] = field(default_factory=list)
+    """Projects brought up by `sample_init` and not yet brought down."""
+
+    auto_compose_files: set[str] = field(default_factory=set)
+    """Generated compose files to remove at shutdown."""
+
+    closed: bool = False
+    """`project_cleanup_shutdown` has run: this lifecycle is finished."""
+
+    owner: int | None = None
+    """For a registry bound outside a scope, the id of the task that bound it."""
+
+
+def cleanup_state() -> PodmanCleanupState:
+    """Return the cleanup registry of the enclosing sandbox lifecycle scope.
+
+    Outside any scope (the provider driven directly), return the registry
+    bound to the current context, binding one if `task_init` never ran here.
+    """
+    scope = sandbox_lifecycle_state()
+    if scope is not None:
+        return scope.get(PodmanCleanupState)
+    state = _ownerless_state.get()
+    if state is None:
+        state = _bind_ownerless_state()
+    return state
+
+
+def _bind_ownerless_state() -> PodmanCleanupState:
+    state = PodmanCleanupState(owner=safe_current_task_id())
+    _ownerless_state.set(state)
+    return state
+
+
 def project_cleanup_startup() -> None:
-    """Initialize cleanup tracking state for a run."""
-    _running_projects.set([])
-    _auto_compose_files.set(set())
-    _cleanup_completed.set(False)
+    """Make sure a cleanup registry exists before samples start.
+
+    Inside a scope the registry is the scope's and is never reset, so a late
+    `task_init` keeps everything the batch has already registered. Outside a
+    scope, a registry belongs to the task that bound it for one lifecycle:
+    another task, or a `task_init` after its shutdown, binds a new one.
+    """
+    if sandbox_lifecycle_state() is not None:
+        cleanup_state()
+        return
+    state = _ownerless_state.get()
+    if state is None or state.closed or state.owner != safe_current_task_id():
+        _bind_ownerless_state()
 
 
 def project_startup(project: ComposeProject) -> None:
@@ -54,7 +109,7 @@ async def project_cleanup(project: ComposeProject, quiet: bool = True) -> None:
 
 async def project_cleanup_shutdown(cleanup: bool) -> None:
     """Cleanup all running projects and tracked auto-compose files."""
-    if _cleanup_completed.get():
+    if cleanup_state().closed:
         return
 
     shutdown_projects = running_projects().copy()
@@ -98,7 +153,7 @@ async def project_cleanup_shutdown(cleanup: bool) -> None:
     for file in auto_compose_files().copy():
         safe_cleanup_auto_compose(file)
 
-    _cleanup_completed.set(True)
+    cleanup_state().closed = True
 
 
 async def cleanup_projects(
@@ -261,20 +316,14 @@ def _normalize_labels(labels: object) -> dict[str, str]:
 
 def running_projects() -> list[ComposeProject]:
     """Return the list of tracked running projects."""
-    return _running_projects.get()
+    return cleanup_state().running_projects
 
 
 def auto_compose_files() -> Set[str]:
     """Return the set of tracked auto-compose files."""
-    return _auto_compose_files.get()
+    return cleanup_state().auto_compose_files
 
 
-_running_projects: ContextVar[list[ComposeProject]] = ContextVar(
-    "podman_running_projects", default=[]
-)
-
-_auto_compose_files: ContextVar[Set[str]] = ContextVar("podman_auto_compose_files")
-
-_cleanup_completed: ContextVar[bool] = ContextVar(
-    "podman_cleanup_executed", default=False
+_ownerless_state: ContextVar[PodmanCleanupState | None] = ContextVar(
+    "podman_cleanup_state", default=None
 )

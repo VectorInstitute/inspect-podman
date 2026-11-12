@@ -938,7 +938,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "inspect-ai", specifier = ">=0.3.170" },
+    { name = "inspect-ai", specifier = ">=0.3.269" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0" },
 ]

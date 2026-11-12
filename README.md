@@ -41,6 +41,8 @@ From PyPI:
 pip install inspect-podman
 ```
 
+It requires `inspect_ai` 0.3.269 or later.
+
 If you are using Inspect Podman in this repository, start by installing the necessary dependencies with:
 
 ```bash
