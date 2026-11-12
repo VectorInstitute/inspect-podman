@@ -9,6 +9,7 @@ authors = [
 ]
 dependencies = [
     "inspect_ai>=0.3.170",
+    "platformdirs>=2.3.0",
     "PyYAML>=6.0",
     "rich>=13.0",
 ]

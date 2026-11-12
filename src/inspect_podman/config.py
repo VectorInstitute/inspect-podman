@@ -7,8 +7,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from inspect_ai._util.appdirs import inspect_data_dir
+from inspect_ai._util.constants import PKG_NAME
 from inspect_ai.util._sandbox.docker.config import _update_build_context
+from platformdirs import user_data_path
 
 COMPOSE_FILES = [
     "compose.yaml",
@@ -67,8 +68,12 @@ def has_containerfile(parent: str = "") -> bool:
 
 
 def auto_compose_dir() -> Path:
-    """Return the directory that holds generated compose files."""
-    return inspect_data_dir(AUTO_COMPOSE_SUBDIR)
+    """Return the directory that holds generated compose files.
+
+    This is the `podman-compose` folder of Inspect's data directory. It is
+    not created here: only writing a generated file creates it.
+    """
+    return user_data_path(PKG_NAME) / AUTO_COMPOSE_SUBDIR
 
 
 # compose project names: lowercase letters, digits, dashes and underscores
@@ -204,6 +209,7 @@ def auto_compose_file(
     if base_dir:
         contents = _update_build_context(contents, _escape_dollars(base_dir))
 
+    auto_compose_dir().mkdir(parents=True, exist_ok=True)
     path = auto_compose_path(project_name)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(contents)

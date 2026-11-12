@@ -22,6 +22,8 @@ from inspect_podman.cleanup import (
 from inspect_podman.podman import PodmanSandboxEnvironment
 from inspect_podman.util import ComposeProject, task_project_name
 
+REAL_AUTO_COMPOSE_DIR = podman_config.auto_compose_dir
+
 pytestmark = pytest.mark.anyio
 
 
@@ -213,11 +215,18 @@ async def test_explicit_compose_file_is_used_and_kept(
     monkeypatch: pytest.MonkeyPatch,
     no_podman: list[str],
     work_dir: Path,
-    data_dir: Path,
+    tmp_path: Path,
 ) -> None:
     compose = work_dir / "compose.yaml"
     compose.write_text("services:\n  default:\n    image: alpine\n")
+    # an unwritable data location: compose files must not need it
+    data_root = tmp_path / "readonly"
+    data_root.mkdir(mode=0o500)
+    monkeypatch.setattr(podman_config, "auto_compose_dir", REAL_AUTO_COMPOSE_DIR)
+    monkeypatch.setattr(podman_config, "user_data_path", lambda name: data_root / name)
 
+    await PodmanSandboxEnvironment.task_init("task_b", "compose.yaml")
+    await PodmanSandboxEnvironment.task_init("task_b", None)
     project_cleanup_startup()
     a = await sample_project("compose.yaml")
     discovered = await sample_project(None)
@@ -228,11 +237,30 @@ async def test_explicit_compose_file_is_used_and_kept(
     b_file = await failing_task_init(monkeypatch, no_podman, "compose.yaml")
     assert b_file == a.config
     await project_cleanup(a)
+    await project_cleanup(discovered)
     await project_cleanup_shutdown(True)
+
+    container = {
+        "Id": "abc123",
+        "Names": ["sandbox_1"],
+        "Labels": {
+            "io.podman.compose.project": a.name,
+            "io.podman.compose.project.working_dir": work_dir.as_posix(),
+            "io.podman.compose.project.config_files": "compose.yaml",
+        },
+    }
+
+    async def podman_ps(*args: Any, **kwargs: Any) -> ExecResult[str]:
+        return ExecResult(
+            success=True, returncode=0, stdout=json.dumps([container]), stderr=""
+        )
+
+    monkeypatch.setattr("inspect_podman.cleanup.subprocess", podman_ps)
+    await cli_cleanup("sandbox_1")
 
     assert compose.exists()
     assert sorted(p.name for p in work_dir.iterdir()) == ["compose.yaml"]
-    assert list(data_dir.iterdir()) == []
+    assert list(data_root.iterdir()) == []
 
 
 async def test_concurrent_inline_samples_keep_their_own_services(

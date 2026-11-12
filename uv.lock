@@ -925,6 +925,7 @@ version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "inspect-ai" },
+    { name = "platformdirs" },
     { name = "pyyaml" },
     { name = "rich" },
 ]
@@ -939,6 +940,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "inspect-ai", specifier = ">=0.3.170" },
+    { name = "platformdirs", specifier = ">=2.3.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0" },
 ]
