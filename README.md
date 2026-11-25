@@ -41,6 +41,8 @@ From PyPI:
 pip install inspect-podman
 ```
 
+It requires `inspect_ai` 0.3.269 or later.
+
 If you are using Inspect Podman in this repository, start by installing the necessary dependencies with:
 
 ```bash
@@ -99,12 +101,13 @@ export INSPECT_PODMAN_COMPOSE=podman-compose
 The provider searches the task directory in this order:
 
 1. `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`
-2. `.compose.yaml` (auto-generated)
-3. `Containerfile`
-4. `Dockerfile`
-5. A default compose that uses the `aisiuk/inspect-tool-support` image
+2. `Containerfile`
+3. `Dockerfile`
+4. A default compose that uses the `aisiuk/inspect-tool-support` image
 
 If you provide `sandbox=("podman", "path/to/compose.yaml")`, that file is used directly.
+
+When there is no compose file, or the config is an inline `ComposeConfig`, the provider writes a compose file for each sandbox project to the `podman-compose` folder of Inspect's data directory, as Inspect's Docker provider does. The files are removed when the task is complete. Relative `build.context` paths in these files are resolved against the task directory (or the Dockerfile's directory if you pass a Dockerfile path). Relative volume and `env_file` paths in an inline `ComposeConfig` resolve as they do under Inspect's Docker provider: against that data folder, not the task directory. An inline `ComposeConfig` cannot use a remote build context (a Git or HTTP URL) or a variable in its build context; use a compose file for those.
 
 ## Healthchecks
 
